@@ -1,0 +1,36 @@
+{
+  "version": "fixture-v1",
+  "maximum_resolution": {
+    "height": 1080,
+    "width": 1920
+  },
+  "films": {
+    "target_bytes": [
+      2000000000,
+      3000000000
+    ],
+    "hard_ceiling_bytes": 4000000000
+  },
+  "television": {
+    "preferred_maximum_height": 480,
+    "resolution_preference": [
+      480,
+      720,
+      1080
+    ],
+    "resolution_caps": {
+      "720p_or_lower": {
+        "up_to_15_minutes_bytes": 250000000,
+        "over_15_up_to_30_minutes_bytes": 500000000,
+        "over_30_up_to_60_minutes_bytes": 1000000000,
+        "over_60_minutes_bytes_per_hour": 1000000000
+      },
+      "1080p_fallback": {
+        "up_to_15_minutes_bytes": 500000000,
+        "over_15_up_to_30_minutes_bytes": 1000000000,
+        "over_30_up_to_60_minutes_bytes": 2000000000,
+        "over_60_minutes_bytes_per_hour": 2000000000
+      }
+    }
+  }
+}

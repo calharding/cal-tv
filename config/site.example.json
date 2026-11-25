@@ -1,0 +1,21 @@
+{
+  "media_root": null,
+  "complete_root": null,
+  "arr_media_root": null,
+  "backlog_shared_store_root": null,
+  "jellyfin_url": null,
+  "jellyfin_library_root": null,
+  "jellyfin_key_file": null,
+  "quality_policy_path": null,
+  "quality_policy_version": null,
+  "quality_policy_sha256": null,
+  "backlog_journals": {},
+  "backlog_writer_locks": {},
+  "backlog_fast_enabled": false,
+  "manual_service_writes_enabled": false,
+  "prepared_scope_enabled": false,
+  "jellyfin_enabled": false,
+  "targeted_refresh_permitted": false,
+  "acquisition_enabled": false,
+  "geek_enabled": false
+}
