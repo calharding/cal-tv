@@ -16,6 +16,7 @@ def inspect_queue(root):
     path = root / "queue.sqlite3"
     if root.is_symlink() or not root.is_dir() or not path.is_file() or path.is_symlink():
         raise ValueError("An existing local queue is required. No state was created.")
+    # This queue view has no physical inventory or age proof, even when it is empty.
     with contextlib.closing(sqlite3.connect(path.resolve().as_uri() + "?mode=ro", uri=True)) as db:
         counts = dict(db.execute("SELECT state,count(*) FROM items GROUP BY state"))
     active = sum(counts.get(s, 0) for s in ("fast_ready", "running", "review_running", "preparing"))

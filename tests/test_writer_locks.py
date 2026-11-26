@@ -1,3 +1,4 @@
+# Check that contention on any writer role unwinds locks already held.
 import unittest,tempfile,fcntl
 from pathlib import Path
 from media_automation.core import Store,ReviewRequired

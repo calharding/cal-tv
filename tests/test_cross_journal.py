@@ -1,3 +1,4 @@
+# Use isolated journals to test overlapping identities and fail-closed evidence.
 import unittest,tempfile,types
 from pathlib import Path
 from media_automation.core import Store,ReviewRequired

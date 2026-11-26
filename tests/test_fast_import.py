@@ -1,3 +1,4 @@
+# Exercise real local links and interrupted intents with a synthetic stream probe.
 import importlib.util,sys,tempfile,unittest,os,json,time
 from pathlib import Path
 from unittest.mock import patch

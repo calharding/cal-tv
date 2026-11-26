@@ -1,3 +1,4 @@
+# Installation-bound segment evidence is deliberately unavailable in the public import path.
 from .core import ReviewRequired
 
 

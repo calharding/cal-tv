@@ -1,3 +1,5 @@
+# SQLite job identity, publication intent, events and delivery receipts.
+# Higher-level coordinators, not Store, decide whether a transition is allowed.
 from __future__ import annotations
 
 import contextlib
@@ -52,6 +54,7 @@ class Store:
 
     def create(self, request: dict) -> dict:
         validate_request(request)
+        # Deduplicate the canonical request, not a filename, search hit or proposed release.
         identity = json.dumps([request['kind'], request['provider_id'],
                                request.get('season'), request.get('episodes', [])],
                               separators=(',', ':'))
@@ -107,6 +110,7 @@ class Store:
                 if row['receipt']!=receipt:raise ValueError('Notification already acknowledged with a different receipt')
             else:
                 self.db.execute('UPDATE outbox SET acknowledged=?,receipt=? WHERE id=?', (time.time(),receipt,event_id))
+            # READY proves import, not notification delivery. A receipt separates the two.
             if row['kind']=='READY':
                 job=self.get(row['job_id'])
                 if job['state'] in ['READY','NOTIFIED']:
@@ -170,6 +174,7 @@ def combined_episode_end(request):
 
 
 def checked_file(root: Path, relative: str) -> Path:
+    # A final containment check alone would accept a symlink that stayed inside the root.
     rel = Path(relative)
     if rel.is_absolute() or '..' in rel.parts or not rel.parts:
         raise ReviewRequired('Unsafe relative path')

@@ -4,6 +4,11 @@ Use a local Git checkout. Add synthetic tests and record exact verification in
 each PR. Never commit actual requests, configured service URLs, tokens, job
 records, library receipts, operational logs, media, or site review evidence.
 
+Start at [the launcher](../fastpassctl) and [offline commands](../media_automation/fastpass.py).
+For the guarded worker, see [backlog_once.py](../media_automation/backlog_once.py).
+The [architecture guide](architecture.md) connects these paths and includes a
+synthetic exercise that needs no site configuration.
+
 Test discovery, source custody, journal state, and independent library verification
 separately. For an import, success is a durable verified receipt against the
 destination and canonical identity. A shadowed alias, incomplete scan, lease,

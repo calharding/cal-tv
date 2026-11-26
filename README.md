@@ -4,6 +4,9 @@ A code-only review baseline for the Cal TV importer and continuity journal. The
 default launch path is offline and does not provision a service, enable a scheduler,
 download media, or publish to a library. A merge does not deploy.
 
+Start with the [architecture guide](docs/architecture.md) to follow one
+fictional file through admission, publication, refusal and restart.
+
 ## Local checks
 
 Requires Python 3.9+ on macOS or Linux. Tests that exercise real stream inspection

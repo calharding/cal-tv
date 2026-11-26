@@ -1,3 +1,4 @@
+# Default to policy limits; the public checkout cannot attest to site resolution exceptions.
 from .core import ReviewRequired
 
 

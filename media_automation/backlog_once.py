@@ -55,6 +55,7 @@ def writer_locks(store,config):
         inodes.add(inode);paths.append(p)
     shared=store.root/'worker.lock'
     if shared not in paths:raise ReviewRequired('Shared Store lock must match one configured writer role')
+    # Ordered, nonblocking acquisition lets ExitStack unwind on any failed role.
     with contextlib.ExitStack() as stack:
         for p in sorted(paths,key=str):
             if p==shared:
@@ -78,6 +79,7 @@ def run(store,job_id,source,config,plan,services,*,expected_request,expected_app
     horizon_policy=config.get('backlog_horizon_policy')
     if horizon_policy not in (None,'pinned','fresh-under-locks') or (horizon_policy=='fresh-under-locks' and config.get('backlog_expected_horizons') is not None):
         raise ReviewRequired('Contradictory or unknown journal horizon policy')
+    # Keep custody across reads, side effects and verification so vacancy does not go stale.
     with writer_locks(store,config):
         job=store.get(job_id)
         if not job or not expected_approval or job.get('approval')!=expected_approval or job['request']!=expected_request:
@@ -133,6 +135,7 @@ def run(store,job_id,source,config,plan,services,*,expected_request,expected_app
         for f in files:
             if f['canonical_episode']!=predicted[f['host_path']]:raise ReviewRequired('Canonical destination episode differs')
         nfos={str(Path(f['host_path']).with_suffix('.nfo')):_nfo(req,f) for f in files}
+        # A restart may use a receipt only for this exact request, plan, roots and policy.
         binding=hashlib.sha256(json.dumps([req,plan,str(source),str(media),policy_digest,prepared_scope],sort_keys=True).encode()).hexdigest()
         existing_table=store.db.execute("SELECT 1 FROM sqlite_master WHERE name='backlog_runs'").fetchone()
         existing=store.db.execute('SELECT 1 FROM backlog_runs WHERE job=?',(job_id,)).fetchone() if existing_table else None
@@ -159,6 +162,7 @@ def run(store,job_id,source,config,plan,services,*,expected_request,expected_app
             if not admission['safe']:raise ReviewRequired('Fresh cross-journal or live catalogue reconciliation blocked admission: '+json.dumps(admission['blockers']))
             expected=config.get('backlog_expected_horizons')
             if expected is not None and expected!=admission['horizons']:raise ReviewRequired('Journal snapshot changed since scope review')
+        # Admission claims the exact existing job, not bytes or permission for other jobs.
         with store.db:
             store.db.execute('CREATE TABLE IF NOT EXISTS backlog_runs (job TEXT PRIMARY KEY,binding TEXT NOT NULL,phase TEXT NOT NULL,result TEXT)')
             prior=store.db.execute('SELECT * FROM backlog_runs WHERE job=?',(job_id,)).fetchone()
@@ -265,6 +269,7 @@ def run(store,job_id,source,config,plan,services,*,expected_request,expected_app
             os.link(src,dst)
         try:
             if prior and prior['phase']=='WAITING_JELLYFIN':
+                # Association already ran. Verify in place rather than publishing it again.
                 rows=json.loads(prior['result'])
                 confirm_local(rows)
                 verified=verify_visible()
