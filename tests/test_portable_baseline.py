@@ -1,3 +1,4 @@
+# Drive the shell launcher and portable analysis with no deployment configuration.
 import json
 import os
 from pathlib import Path

@@ -1,3 +1,5 @@
+# Authentication, response limits and read-side Jellyfin evidence live here.
+# This module supplies neither credentials nor permission to run a site job.
 from __future__ import annotations
 
 import configparser
@@ -54,6 +56,7 @@ class Jellyfin:
     def __init__(self, config):self.config=config
 
     def library_path(self, path):
+        # Translate the same relative file between host and service roots, not by title.
         root = Path(self.config['media_root'])
         try:
             relative = Path(path).relative_to(root)

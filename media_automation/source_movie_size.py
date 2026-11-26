@@ -1,3 +1,4 @@
+# Fail closed for installation-bound film size exceptions in the public import path.
 from .core import ReviewRequired
 
 

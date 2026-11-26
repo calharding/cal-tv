@@ -21,6 +21,7 @@ def validate_prepared_scope(config, request, source):
     source = Path(source).absolute()
     require(not any(p.is_symlink() for p in [source, *source.parents]), 'Prepared source ancestry is a symlink')
     scopes = config.get('prepared_source_scopes', [])
+    # Match a named source directory, not the whole tree beneath a staging root.
     matches = [s for s in scopes if Path(s['prepared_path']).parent == source]
     if not matches:
         return None

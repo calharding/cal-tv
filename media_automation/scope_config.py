@@ -33,6 +33,7 @@ def scoped_config(profile, live, run_directory):
         if not isinstance(keyfile,str) or not Path(keyfile).is_absolute() or not isinstance(url,str) or not url:
             raise ReviewRequired('Existing Jellyfin connection references are missing')
         cfg['jellyfin_key_file']=keyfile;cfg['jellyfin_url']=url
+    # Use a separate catalogue intent journal rather than reusing another run's effects.
     directory=Path(run_directory)
     if not directory.is_absolute() or '..' in directory.parts:
         raise ReviewRequired('Absolute scoped review directory required')

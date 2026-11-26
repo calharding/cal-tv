@@ -58,6 +58,7 @@ def run(manifest,*,executor=_execute,checkpoint=None):
     with (root/'queue.lock').open('a') as lock:
         try:fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
         except BlockingIOError:raise ReviewRequired('Existing supervised queue already owns this manifest') from None
+        # This lock serializes one manifest, not the native jobs in other journals.
         with contextlib.closing(sqlite3.connect(root/'queue.sqlite3')) as db:
             db.row_factory=sqlite3.Row;db.execute('PRAGMA synchronous=FULL')
             db.execute('CREATE TABLE IF NOT EXISTS manifest (id INTEGER PRIMARY KEY CHECK(id=1),digest TEXT NOT NULL)')
@@ -76,6 +77,7 @@ def run(manifest,*,executor=_execute,checkpoint=None):
                 if row['state']=='READY':completed+=1;continue
                 if row['state']=='BLOCKED':return {'status':'BLOCKED','job_id':item['job_id'],'completed':completed,'reconciliation_required':True}
                 if (root/'stop-after-current').exists():return {'status':'STOPPED','completed':completed,'next_job_id':item['job_id']}
+                # RUNNING can survive a crash. Only the exact coordinator may prove its effects.
                 doc=_scope(item)  # Revalidate immutable file immediately before each call.
                 if doc['config'].get('backlog_fast_enabled') is not True or doc['config'].get('manual_service_writes_enabled') is not True:
                     raise ReviewRequired('Queued scope execution is disabled')

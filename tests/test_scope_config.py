@@ -1,3 +1,4 @@
+# Verify that inheriting service references cannot activate an import.
 import copy,unittest,sys,importlib.util
 from pathlib import Path
 from media_automation.scope_config import scoped_config

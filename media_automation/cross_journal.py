@@ -10,6 +10,7 @@ ROLES={'root','manual','batch','films'}
 def _overlaps(request,wanted,aliases=None):
     aliases=set(aliases or [wanted['provider_id']])
     if request.get('provider_id') not in aliases:
+        # Same title and year are a conflict to resolve, not proof two IDs are equivalent.
         if str(request.get('title','')).casefold()==str(wanted.get('title','')).casefold() and request.get('year')==wanted.get('year'):
             raise ReviewRequired('Same-title provider alias is unresolved')
         return False
@@ -69,6 +70,7 @@ def reconcile(stores,scope,*,services=None,jellyfin=None,recovery_snapshot=None)
         db=sqlite3.connect(p.as_uri()+'?mode=ro',uri=True)
         db.row_factory=sqlite3.Row
         try:
+            # Read a consistent live snapshot, including WAL state, without touching the schema.
             db.execute('PRAGMA query_only=ON');db.execute('BEGIN')
             jobs=[dict(x) for x in db.execute('SELECT id,state,request,report,approval,updated FROM jobs ORDER BY id')]
             imports=[dict(x) for x in db.execute('SELECT * FROM imports ORDER BY job_id,dst')]

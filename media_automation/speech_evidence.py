@@ -8,6 +8,7 @@ def language_evidence(path,request):
     evidence=request.get('offline_language_verification')
     by_source=request.get('offline_language_verification_by_sha256')
     if by_source is not None:
+        # A per-file hash map is an alternative to, not a fallback for, one global review.
         if evidence or not isinstance(by_source,dict):
             raise ReviewRequired('Offline language evidence has ambiguous source bindings')
         evidence=by_source.get(sha256(path))
@@ -49,6 +50,7 @@ def offline_language_verified(path,request):
             or type(sample.get('offset_seconds')) not in [int,float] or sample['offset_seconds']<0
             or type(sample.get('duration_seconds')) not in [int,float] or not 10<=sample['duration_seconds']<=30):continue
         accepted.append(sample)
+    # Require separated coherent samples so a single intro or repeated snippet cannot qualify.
     if len(accepted)<2 or max(s['offset_seconds'] for s in accepted)-min(s['offset_seconds'] for s in accepted)<60:
         raise ReviewRequired('Offline language needs two separated coherent high-confidence speech samples')
     if evidence.get('source_sha256')!=sha256(path):

@@ -1,3 +1,5 @@
+# Validate completed sources and publish exact no-overwrite library links.
+# This layer records local provenance; it does not verify external catalogues.
 from __future__ import annotations
 
 import errno
@@ -53,6 +55,7 @@ def validate_video(path, info, request, episode=None, decoder=True,policy=None,s
     source_resolution_approved=approved_source_resolution(path,request,episode,width,height)
     from .source_movie_size import approved_existing_movie_size
     movie_size_approved=approved_existing_movie_size(path,request)
+    # Recheck measured media rather than treating a reviewed release listing as a probe.
     if policy:
         if request['kind']=='movie' and path.stat().st_size>policy['films']['hard_ceiling_bytes'] and not movie_size_approved:
             raise ReviewRequired('Actual film exceeds the 4 decimal GB hard ceiling')
@@ -192,6 +195,7 @@ def inventory(source: Path, request):
 
 
 def identity_seal(path):
+    # This is a stat identity, not a content checksum. lstat refuses aliases by symlink.
     st = path.lstat()
     if not stat.S_ISREG(st.st_mode):
         raise ReviewRequired('Media must be a regular non-symlink file')
@@ -216,7 +220,7 @@ def import_job(store, job, source: Path, media: Path, *, probe_fn=probe, decoder
         raise ReviewRequired('Library root is invalid')
     rows = []
     sidecars=[p for p in source.rglob('*') if p.is_file() and p.suffix.lower() in {'.srt','.ass','.ssa','.vtt','.sub','.idx'}]
-        # Validate every file before publishing the first one.
+    # Validate every file before publishing the first one.
     for src, ep in inventory(source, request):
         initial_seal = identity_seal(src)
         raw_probe=probe_fn(src)
@@ -268,6 +272,7 @@ def import_job(store, job, source: Path, media: Path, *, probe_fn=probe, decoder
                 raise ReviewRequired('Prior import intent differs; reconcile before retry')
             if not dst.exists() and prior['state'] != 'INTENT':
                 raise ReviewRequired('Previously linked destination is missing; reconcile')
+        # An occupied path is recoverable only if the exact prior intent owns this inode.
         if dst.exists() or dst.is_symlink():
             if (not dst.is_symlink() and prior and prior['job_id'] == job_id
                 and prior['src'] == str(src) and prior['state'] in ('INTENT', 'LINKED')
@@ -277,6 +282,8 @@ def import_job(store, job, source: Path, media: Path, *, probe_fn=probe, decoder
                 rows.append({'source': str(src), 'destination': str(dst), 'sha256': digest, 'identity_seal': initial_seal, 'probe': info, 'recovered': True})
                 continue
             raise ReviewRequired('Library destination already exists; never overwrite')
+        # The nearest existing directory exposes an obvious cross-device refusal early.
+        # Equal device IDs are not a guarantee; the kernel still decides at link time.
         parent = dst.parent
         while not parent.exists():
             parent = parent.parent

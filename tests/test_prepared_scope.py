@@ -1,3 +1,4 @@
+# Check that a derivative is admitted only under its named seal, policy and limits.
 import copy,tempfile,unittest,sys,importlib.util
 from pathlib import Path
 from media_automation.prepared_scope import validate_prepared_scope

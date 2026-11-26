@@ -1,3 +1,4 @@
+# Exercise immutable manifest custody, stop-after-current and restart with fake outcomes.
 import unittest,tempfile,json,hashlib,fcntl,sqlite3
 from pathlib import Path
 from media_automation.backlog_queue import run,validate,request_stop

@@ -30,6 +30,7 @@ def provider_matches(item, provider):
 
 
 def canonical_episode_ids(file):
+    # Extra provider IDs need a reviewed cross-reference to the canonical episode.
     ids=file.get('canonical_provider_ids')
     allowed={'Tvdb','Imdb','Tmdb','TvRage'}
     if not isinstance(ids,dict) or 'Tvdb' not in ids or not set(ids)<=allowed:
@@ -49,6 +50,7 @@ def canonical_episode_ids(file):
 
 def canonical_plan_episodes(request,file):
     """Exact approved pair only; secondary identity verified in Arr, not invented in JF."""
+    # The public validator refuses combined cases; ordinary TV files bind one slot.
     end=combined_episode_end(request)
     if end is None:
         if file.get('canonical_episode_end') is not None or file.get('canonical_episode_parts') is not None:
@@ -372,6 +374,7 @@ class ManualServices:
                 subtitles = [x for x in streams if x.get('Type') == 'Subtitle' and x.get('Index') == subtitle_index]
                 if len(subtitles) != 1 or language(subtitles[0].get('Language')) != 'eng':
                     raise ReviewRequired('Non-English or unknown subtitle enabled by default')
+            # PlaybackInfo identifies the source; a bounded read tests actual server delivery.
             data = self.stream(item['Id'], 65536)
             if not isinstance(data, bytes) or not data or len(data) > 65536:
                 raise ReviewRequired('Jellyfin bounded stream delivery failed')

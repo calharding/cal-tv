@@ -44,6 +44,7 @@ def load_scope(path):
     return doc
 
 def existing_job(doc):
+    # An approval in a scope file is a claim; bind it to the already recorded job.
     dbpath=Path(doc['config']['backlog_shared_store_root'])/'jobs.sqlite3'
     if not dbpath.is_file() or dbpath.is_symlink():raise ReviewRequired('Existing shared journal required; no automatic creation')
     with contextlib.closing(sqlite3.connect(dbpath.as_uri()+'?mode=ro',uri=True)) as db:
@@ -60,6 +61,7 @@ def execute_scope(doc,mode,*,services_factory=real_services):
     if mode=='execute' and (cfg.get('backlog_fast_enabled') is not True or cfg.get('manual_service_writes_enabled') is not True):
         raise ReviewRequired('Execution disabled; both reviewed enable switches must be explicit')
     if mode not in ('check','execute'):raise ReviewRequired('Unknown launch mode')
+    # This injection seam supports isolated tests. The bundled factory refuses live access.
     services,jelly=services_factory(cfg,doc['plan'],doc['approval_reference'])
     if mode=='check':
         load_policy(cfg)

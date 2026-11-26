@@ -1,3 +1,4 @@
+# Check the offline/live boundary and exact job binding with injected adapters.
 import unittest,tempfile,types,json
 from pathlib import Path
 from unittest.mock import patch

@@ -39,6 +39,7 @@ def recover(store,doc,replacement,*,expected_job,expected_run,expected_sources,e
         admission=store.db.execute('SELECT * FROM backlog_admission WHERE job=?',(jid,)).fetchone()
         if not admission:raise ReviewRequired('Prior admission missing')
         tables={r[0] for r in store.db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+        # An intent can outlive its submitter; its absence matters as much as target vacancy.
         for table,key in [('imports','job_id'),('import_identity','job_id'),('backlog_metadata','job'),('backlog_refresh','job')]:
             if table in tables and store.db.execute('SELECT 1 FROM '+table+' WHERE '+key+'=?',(jid,)).fetchone():raise ReviewRequired('Prior effect or intent exists')
         intent=Path(cfg['catalogue_intent_db'])
@@ -75,6 +76,7 @@ def recover(store,doc,replacement,*,expected_job,expected_run,expected_sources,e
             dst=Path(f['destination'])
             if os.path.lexists(dst) or os.path.lexists(dst.with_suffix('.nfo')):raise ReviewRequired('Target appeared during preview')
         binding=hashlib.sha256(json.dumps([new,plan,str(source),str(media),digest,prepared],sort_keys=True).encode()).hexdigest()
+        # Keep the exact prior job, run and receipt in the correction audit before rebinding.
         audit=dict(prior_job=expected_job,prior_run=expected_run,expected_sources=expected_sources,prior_admission=dict(admission),error_receipt=error_receipt,error_receipt_path=str(receipt_path),recovery_approval=recovery_approval,replacement=new,preview=preview,new_binding=binding)
         with store.db:
             # CAS again inside the SQLite transaction; all writers remain locked.

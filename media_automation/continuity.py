@@ -39,6 +39,7 @@ def refresh(db, audit, *, marker, now=None):
     if audit.get("errors") != [] or audit.get("coverage_complete") is not True:
         raise IntakeCoverageError("Physical audit coverage is incomplete")
 
+    # Validate the whole inventory before touching the journal or its checkpoint.
     rows = {}
     for row in audit["rows"]:
         if not isinstance(row, dict):
@@ -63,6 +64,7 @@ def refresh(db, audit, *, marker, now=None):
         for key, row in rows.items():
             status = row["status"]
             state = "pending" if status == "PENDING_FIRST_PASS" else status.lower()
+            # Existing hints are the quicker evidence pass, not authority to import.
             phase = (0 if row.get("hints") else 1) if state == "pending" else 2
             payload = json.dumps(row)
             prior = db.execute("SELECT state FROM jobs WHERE k=?", (key,)).fetchone()
@@ -91,6 +93,7 @@ def claim(db, now, owner, *, lease_seconds=120):
     if not owner or lease_seconds <= 0:
         raise ValueError("Explicit owner and positive lease required")
     with db:
+        # Expiry makes analysis runnable again; it does not release an import hold.
         db.execute("UPDATE jobs SET state='pending',owner=NULL,updated=0 "
                    "WHERE state='leased' AND until<=?", (now,))
         row = db.execute("SELECT k,payload FROM jobs WHERE state='pending' "

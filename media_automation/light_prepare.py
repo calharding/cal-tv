@@ -19,6 +19,7 @@ def flags(s,default=None,forced=None):
  if forced is not None:d['forced']=forced
  return '+'.join(k for k,v in d.items() if v) or '0'
 def command(source,target,before,english_index):
+ # Keep every track; specify dispositions so the muxer does not choose new defaults.
  args=['ffmpeg','-nostdin','-hide_banner','-loglevel','error','-n','-i',str(source),'-map','0','-map_metadata','0','-map_chapters','0','-c','copy']
  for pos,s in enumerate(streams(before)):
   if s['codec_type'] not in ('audio','subtitle'):args += ['-disposition:'+str(pos),flags(s)]
@@ -67,6 +68,7 @@ def prepare(source,destination,record,*,expected_seal,max_bytes,max_height,engli
  needs=any(bool(s.get('disposition',{}).get('default')) != (s['index']==english_index) for s in aud) or any((s.get('disposition',{}).get('default') or s.get('disposition',{}).get('forced')) and language(s) not in ('eng','en') for s in ss if s.get('codec_type')=='subtitle')
  if not needs:return {**selection_record,'mode':'ORIGINAL','path':str(source),'identity_seal':expected_seal,'probe':before,'probe_calls':1,'full_hashes':0,'decode_passes':0,'elapsed_seconds':time.monotonic()-start}
  require(destination.suffix.lower()=='.mkv','All-track remux requires explicit MKV destination')
+ # Keep interrupted output away from the admitted folder; the intent names the partial.
  partial=record.parent/('.'+record.name+'.partial.mkv')
  require(not partial.is_relative_to(destination.parent), 'Partial staging must be outside admitted media folder')
  require(record.parent.stat().st_dev==destination.parent.stat().st_dev, 'Staging and prepared output must share filesystem')

@@ -10,6 +10,7 @@ from .core import ReviewRequired
 
 
 def load_policy(config):
+    # A version label is for humans; the digest pins the actual rules being applied.
     path=config.get('quality_policy_path')
     if not path:raise ReviewRequired('A versioned quality/size policy is required')
     try:
@@ -59,7 +60,7 @@ def runtimes(request,candidate):
     return values
 
 
-# Cal explicitly approved only these three 720p MeGusta postings on 2026-11-04.
+# Preferred-size compatibility helper. Explicit episode exceptions are checked below.
 def episode_targets(seconds,policy):
     return (0,episode_cap(seconds,720,policy))
 
@@ -293,6 +294,7 @@ FIELDS=['guid','name','bytes','height','width','source_height','upscaled','suita
 def choose_release(request,guid,evidence,policy,digest,review_reference=None):
     raw=evidence.get('candidates',[])
     if not isinstance(raw,list) or not raw or len(raw)>200:raise ReviewRequired('Bounded release comparison is required')
+    # Retain only fields needed to replay the policy decision, not raw search payloads.
     candidates=[{k:c[k] for k in FIELDS if k in c} for c in raw]
     if len({c.get('guid') for c in candidates})!=len(candidates):raise ReviewRequired('Duplicate candidate GUIDs in comparison')
     matches=[c for c in candidates if c.get('guid')==guid]
