@@ -43,6 +43,39 @@ class Entrypoint(unittest.TestCase):
         self.assertEqual((code, out["status"]), (2, "STOPPED"))
         self.assertEqual({p.name for p in self.root.iterdir()}, {"scope.json"})
 
+    def test_shipped_site_example_cannot_supply_private_settings_or_activate(self):
+        config = json.loads((ROOT / "config" / "site.example.json").read_text())
+        for key in ("media_root", "complete_root", "arr_media_root",
+                    "backlog_shared_store_root", "jellyfin_url",
+                    "jellyfin_library_root", "jellyfin_key_file",
+                    "quality_policy_path", "quality_policy_version",
+                    "quality_policy_sha256"):
+            with self.subTest(setting=key):
+                self.assertTrue(config[key] is None, "Published location/reference must be unset")
+        for key in ("backlog_journals", "backlog_writer_locks"):
+            with self.subTest(setting=key):
+                self.assertTrue(config[key] == {}, "Published bindings must be empty")
+        for key in ("backlog_fast_enabled", "manual_service_writes_enabled",
+                    "prepared_scope_enabled", "jellyfin_enabled",
+                    "targeted_refresh_permitted", "acquisition_enabled",
+                    "geek_enabled"):
+            with self.subTest(setting=key):
+                self.assertTrue(config[key] is False, "Published permission must be disabled")
+
+        scope = self.root / "fixture-scope.json"
+        scope.write_text(json.dumps({
+            "schema_version": 1, "config": config, "plan": {},
+            "request": {"kind": "movie", "title": "Synthetic Film", "year": 2000,
+                        "provider_id": "tmdb:fixture"},
+            "source": str(self.root / "synthetic-source"),
+            "job_id": "synthetic-job", "approval_reference": "synthetic-approval",
+        }))
+        self.assertTrue(self.cli("validate", "--scope", scope) == (2, {
+            "status": "STOPPED", "error_type": "ReviewRequired",
+            "detail": "Explicit shared store required",
+        }), "Offline validation must stop with a value-free reason")
+        self.assertEqual({p.name for p in self.root.iterdir()}, {"fixture-scope.json"})
+
     def test_queue_status_reports_holds_and_never_creates_queue(self):
         code, out = self.cli("--root", self.root, "status")
         self.assertEqual((code, out["status"]), (2, "BLOCKED_QUEUE_UNAVAILABLE"))
