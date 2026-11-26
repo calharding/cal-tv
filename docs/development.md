@@ -26,20 +26,25 @@ any admission test fails. Never let a branch push or merge run an importer.
 The portable check compares the source with the deepest existing directory
 above the intended destination. It does not create files, copy data, or grant
 publication authority. A fresh coordinator run checks again before admission,
-and the importer checks each new link at the publication boundary. A mismatch
-observed there stops before the media or its publication callback writes an
-NFO. Already-linked verification does not require a new hardlink.
+and the importer checks each new link at the publication boundary. It
+rechecks the screened source seal after creating the destination directory
+and before journalling intent, then again after the final mount observation.
+A mismatch at either boundary prevents the callback from writing media or
+an NFO. An earlier valid intent is retained. Already-linked verification
+does not require a new hardlink.
 
 Linux compares both the device and the mount ID of the open file or directory.
 Separate bind mounts can share a device but still reject hardlinks. Linux
 requires readable descriptor mount information in procfs and refuses to use
 a device-only guess if that information is unavailable. Other supported Unix
 hosts compare device IDs. That fallback cannot distinguish mount aliases that
-share a device, and no userspace check can rule out a later mount change.
-The actual hardlink syscall remains authoritative. A late refusal never
-triggers a copy or an automatic cleanup. If admission, an intent, an empty
-directory or another publication effect already exists, retain it for normal
-reconciliation.
+share a device. Linux opens the final component without following symlinks,
+but this does not pin every ancestor or replace the importer's path checks.
+These observations cannot prevent a later path, mount, or source change
+before or during the callback. The kernel's hardlink decision remains
+authoritative. A late refusal never triggers a copy or an automatic cleanup.
+If admission, an intent, an empty directory or another publication effect
+already exists, retain it for normal reconciliation.
 
 Run the focused synthetic tests with:
 

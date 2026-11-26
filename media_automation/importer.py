@@ -384,16 +384,19 @@ def import_job(store, job, source: Path, media: Path, *, probe_fn=probe, decoder
         require_identity(src, seal)
         require_same_publication_filesystem(src, dst)
         dst.parent.mkdir(parents=True, mode=0o755, exist_ok=True)
-        st = src.stat()
+        # Directory creation may take time. Do not journal a stale screened source.
+        require_identity(src, seal)
+        device, inode = seal[:2]
         # Journal intent before link(). A crash after link is reconciled by inode/hash.
         with store.db:
             store.db.execute('INSERT OR REPLACE INTO import_identity VALUES(?,?,?)', (job_id, str(dst), json.dumps(seal)))
             store.db.execute('INSERT INTO imports VALUES(?,?,?,?,?,?,?) ON CONFLICT(job_id,dst) DO UPDATE SET state=excluded.state',
-                             (job_id, str(src), str(dst), row['sha256'], st.st_dev, st.st_ino, 'INTENT'))
+                             (job_id, str(src), str(dst), row['sha256'], device, inode, 'INTENT'))
         try:
-            # The callback can publish metadata as well as the link. Detect a
-            # changed mount before entering either publication path.
+            # Refuse drift before the callback can publish metadata or media.
+            # Check the seal last, since observing the mount also takes I/O.
             require_same_publication_filesystem(src, dst)
+            require_identity(src, seal)
             link_fn(src, dst)
         except OSError as e:
             if e.errno == errno.EXDEV:

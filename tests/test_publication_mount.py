@@ -1,5 +1,6 @@
 """Synthetic publication fixtures. No live transport or actual media."""
 import errno
+import json
 import os
 from pathlib import Path
 import tempfile
@@ -168,6 +169,66 @@ class PublicationMount(unittest.TestCase):
                 self.execute()
         self.assert_no_publication()
         self.assertEqual(self.store.db.execute("SELECT state FROM imports").fetchone()[0], "INTENT")
+        self.assertIsNone(self.store.db.execute("SELECT 1 FROM sqlite_master WHERE name='backlog_metadata'").fetchone())
+        self.assertEqual(self.store.db.execute("SELECT phase FROM backlog_runs").fetchone()[0], "BLOCKED")
+
+    def test_source_changed_during_mkdir_stops_before_intent_or_publication(self):
+        mkdir = Path.mkdir
+        replacement = b"synthetic source changed during destination mkdir"
+        changed = False
+
+        def mutate_after_mkdir(path, *args, **kwargs):
+            nonlocal changed
+            result = mkdir(path, *args, **kwargs)
+            if path == self.target.parent and not changed:
+                self.original.write_bytes(replacement)
+                changed = True
+            return result
+
+        with patch.object(Path, "mkdir", mutate_after_mkdir):
+            with self.assertRaisesRegex(ReviewRequired, "Source identity or metadata changed"):
+                self.execute()
+
+        self.assertTrue(changed)
+        self.assertEqual(self.original.read_bytes(), replacement)
+        self.assertTrue(self.target.parent.is_dir())
+        self.assertFalse(self.target.exists())
+        self.assertFalse(self.nfo.exists())
+        self.assertEqual(self.services.writes, 0)
+        self.assertIsNone(self.store.db.execute("SELECT 1 FROM imports").fetchone())
+        self.assertIsNone(self.store.db.execute("SELECT 1 FROM import_identity").fetchone())
+        self.assertIsNone(self.store.db.execute("SELECT 1 FROM sqlite_master WHERE name='backlog_metadata'").fetchone())
+        self.assertEqual(self.store.db.execute("SELECT phase FROM backlog_runs").fetchone()[0], "BLOCKED")
+
+    def test_source_replaced_during_final_mount_check_preserves_only_old_intent(self):
+        before = importer.identity_seal(self.original)
+        earlier = self.root / "earlier-source.mkv"
+        replacement = b"synthetic new inode after intent"
+        filesystem = importer._publication_filesystem
+
+        def replace_at_final_check(path, *, directory):
+            observed = filesystem(path, directory=directory)
+            if (directory and not earlier.exists()
+                    and self.store.db.execute("SELECT 1 FROM imports").fetchone() is not None):
+                self.original.rename(earlier)
+                self.original.write_bytes(replacement)
+            return observed
+
+        with patch.object(importer, "_publication_filesystem", side_effect=replace_at_final_check):
+            with self.assertRaisesRegex(ReviewRequired, "Source identity or metadata changed"):
+                self.execute()
+
+        self.assertEqual(importer.identity_seal(earlier), before)
+        self.assertEqual(earlier.read_bytes(), self.before[0])
+        self.assertEqual(self.original.read_bytes(), replacement)
+        self.assertTrue(self.target.parent.is_dir())
+        self.assertFalse(self.target.exists())
+        self.assertFalse(self.nfo.exists())
+        self.assertEqual(self.services.writes, 0)
+        row = self.store.db.execute("SELECT src,dst,device,inode,state FROM imports").fetchone()
+        self.assertEqual(tuple(row), (str(self.original), str(self.target), *before[:2], "INTENT"))
+        saved = self.store.db.execute("SELECT seal FROM import_identity").fetchone()[0]
+        self.assertEqual(json.loads(saved), before)
         self.assertIsNone(self.store.db.execute("SELECT 1 FROM sqlite_master WHERE name='backlog_metadata'").fetchone())
         self.assertEqual(self.store.db.execute("SELECT phase FROM backlog_runs").fetchone()[0], "BLOCKED")
 
