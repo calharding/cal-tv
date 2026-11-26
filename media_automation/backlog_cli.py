@@ -6,7 +6,7 @@ No job creation, acquisition, daemon, automatic retry, or credential provisionin
 import argparse,json,sqlite3,contextlib
 from pathlib import Path
 from .core import Store,ReviewRequired,validate_request
-from .importer import inventory,destination,identity_seal
+from .importer import inventory,destination,identity_seal,require_same_publication_filesystem
 from .quality_policy import load_policy
 from .prepared_scope import validate_prepared_scope
 from .adapters import Jellyfin
@@ -71,9 +71,12 @@ def execute_scope(doc,mode,*,services_factory=real_services):
         canonical=services._item(doc['plan'])
         roles=[role for role,p in cfg['backlog_journals'].items() if Path(p)==Path(cfg['backlog_shared_store_root'])/'jobs.sqlite3']
         if len(roles)!=1:raise ReviewRequired('Job store role is ambiguous')
-        files=[{'source':str(src),'prepared_root':str(source),'identity_seal':identity_seal(src),'episode':ep,
-                'destination':str(media/(str(destination(req,ep))+src.suffix.lower())),'alternate_destinations':[]}
-               for src,ep in inventory(source,req)]
+        files=[]
+        for src,ep in inventory(source,req):
+            dst=media/(str(destination(req,ep))+src.suffix.lower())
+            require_same_publication_filesystem(src,dst)
+            files.append({'source':str(src),'prepared_root':str(source),'identity_seal':identity_seal(src),'episode':ep,
+                          'destination':str(dst),'alternate_destinations':[]})
         aliases=[req['provider_id']]+[prefix+':'+str(canonical[key]) for prefix,key in [('tmdb','tmdbId'),('imdb','imdbId')] if canonical.get(key)]
         scope={'request':req,'plan':doc['plan'],'files':files,'prepared_scope':prepared,'provider_aliases':aliases,
                'admission_jobs':[{'role':roles[0],'id':doc['job_id'],'state':'AUTHORIZED'}]}

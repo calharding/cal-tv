@@ -8,6 +8,7 @@ import os
 import subprocess
 import time
 import stat
+import sys
 from pathlib import Path
 from .core import ReviewRequired, checked_file, safe_component, sha256, combined_episode_end
 from .quality_policy import expected_audio, foreign_subtitles_required, language, episode_cap, requested_episode_cap
@@ -207,6 +208,54 @@ def require_identity(path, expected):
         raise ReviewRequired('Source identity or metadata changed during import')
 
 
+def _publication_filesystem(path, *, directory):
+    """Observe a device and (on Linux) the mount of the same open object."""
+    is_expected = stat.S_ISDIR if directory else stat.S_ISREG
+    try:
+        if not sys.platform.startswith("linux"):
+            info = path.lstat()
+            if not is_expected(info.st_mode):
+                raise ReviewRequired("Unexpected publication filesystem path type")
+            return info.st_dev, None
+
+        if not hasattr(os, "O_PATH"):
+            raise ReviewRequired("Linux publication mount identity is unavailable")
+        fd = os.open(path, os.O_PATH | os.O_NOFOLLOW | (os.O_DIRECTORY if directory else 0))
+        try:
+            info = os.fstat(fd)
+            if not is_expected(info.st_mode):
+                raise ReviewRequired("Unexpected publication filesystem path type")
+            with open(f"/proc/self/fdinfo/{fd}", encoding="ascii") as status:
+                ids = [line.partition(":")[2].strip() for line in status if line.startswith("mnt_id:")]
+            if len(ids) != 1 or not ids[0].isdecimal():
+                raise ReviewRequired("Linux publication mount identity is unavailable")
+            return info.st_dev, int(ids[0])
+        finally:
+            os.close(fd)
+    except (OSError, UnicodeError):
+        raise ReviewRequired("Could not verify publication filesystem") from None
+
+
+def require_same_publication_filesystem(source, destination):
+    """Check a source against the nearest existing destination directory, without writes."""
+    source, destination = Path(source), Path(destination)
+    try:
+        for parent in destination.parents:
+            try:
+                parent.lstat()  # A symlink or non-directory is not a missing directory.
+            except FileNotFoundError:
+                continue
+            break
+        else:
+            raise ReviewRequired("Publication destination has no existing ancestor")
+    except OSError:
+        raise ReviewRequired("Could not verify publication destination ancestry") from None
+    original = _publication_filesystem(source, directory=False)
+    target = _publication_filesystem(parent, directory=True)
+    if original != target:
+        raise ReviewRequired("EXDEV: hardlinks require the same mount; no copy fallback")
+
+
 def import_job(store, job, source: Path, media: Path, *, probe_fn=probe, decoder=True, link_fn=os.link,policy=None,selection=None,screening="legacy"):
     if screening not in ('legacy', 'light'):
         raise ReviewRequired('Unknown screening mode')
@@ -282,13 +331,7 @@ def import_job(store, job, source: Path, media: Path, *, probe_fn=probe, decoder
                 rows.append({'source': str(src), 'destination': str(dst), 'sha256': digest, 'identity_seal': initial_seal, 'probe': info, 'recovered': True})
                 continue
             raise ReviewRequired('Library destination already exists; never overwrite')
-        # The nearest existing directory exposes an obvious cross-device refusal early.
-        # Equal device IDs are not a guarantee; the kernel still decides at link time.
-        parent = dst.parent
-        while not parent.exists():
-            parent = parent.parent
-        if src.stat().st_dev != parent.stat().st_dev:
-            raise ReviewRequired('EXDEV: hardlinks require the same mount; no copy fallback')
+        require_same_publication_filesystem(src, dst)
         rows.append({'source': str(src), 'destination': str(dst), 'sha256': digest, 'identity_seal': initial_seal, 'probe': info, 'recovered': False})
     if sidecars and request.get('subtitle_mappings'):
         import re
@@ -311,6 +354,8 @@ def import_job(store, job, source: Path, media: Path, *, probe_fn=probe, decoder
             digest=sha256(src);require_identity(src, subtitle_seal);prior=store.db.execute('SELECT * FROM imports WHERE dst=?',(str(dst),)).fetchone()
             recovered=dst.exists() and prior is not None and prior['job_id']==job_id and os.path.samefile(src,dst) and prior['sha256']==digest
             if dst.is_symlink() or (dst.exists() and not recovered):raise ReviewRequired('Subtitle destination already exists')
+            if not recovered:
+                require_same_publication_filesystem(src, dst)
             if any(r['destination']==str(dst) for r in rows):raise ReviewRequired('Duplicate subtitle destination')
             rows.append({'source':str(src),'destination':str(dst),'sha256':digest,'identity_seal':subtitle_seal,'probe':{'subtitle_language':subtitle_language,'content_review':mapping['review_approval']},'recovered':recovered})
             if subtitle_language in ['en','eng'] and mapping.get('usable') is True and mapping.get('matching') is True:
@@ -335,9 +380,10 @@ def import_job(store, job, source: Path, media: Path, *, probe_fn=probe, decoder
             with store.db:
                 store.db.execute('UPDATE imports SET state=? WHERE job_id=? AND dst=?',('LINKED',job_id,str(dst)))
             continue
-        dst.parent.mkdir(parents=True, mode=0o755, exist_ok=True)
-        seal = row.get('identity_seal', identity_seal(src))
+        seal = row['identity_seal']
         require_identity(src, seal)
+        require_same_publication_filesystem(src, dst)
+        dst.parent.mkdir(parents=True, mode=0o755, exist_ok=True)
         st = src.stat()
         # Journal intent before link(). A crash after link is reconciled by inode/hash.
         with store.db:
@@ -345,6 +391,9 @@ def import_job(store, job, source: Path, media: Path, *, probe_fn=probe, decoder
             store.db.execute('INSERT INTO imports VALUES(?,?,?,?,?,?,?) ON CONFLICT(job_id,dst) DO UPDATE SET state=excluded.state',
                              (job_id, str(src), str(dst), row['sha256'], st.st_dev, st.st_ino, 'INTENT'))
         try:
+            # The callback can publish metadata as well as the link. Detect a
+            # changed mount before entering either publication path.
+            require_same_publication_filesystem(src, dst)
             link_fn(src, dst)
         except OSError as e:
             if e.errno == errno.EXDEV:
