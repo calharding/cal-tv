@@ -56,20 +56,25 @@ flowchart TD
 2. **Admit and screen.** The caller supplies a persisted job, approval, exact
    source directory, and reviewed catalogue plan. `backlog_once.run` acquires
    all four writer locks without waiting. For fresh admission it checks
-   identity, policy version and digest, the external mount guard and storage
-   floor, and cross-journal and library vacancy. Admission reserves the job in
-   SQLite, not a byte quota. After admission, `importer.import_job` checks
-   actual streams, duration, language, subtitle flags and targets before the
-   first link. Light screening is not a full decode or content checksum.
+   identity, policy version and digest, the external storage guard and storage
+   floor, and cross-journal and library vacancy. It also checks that the source
+   and nearest existing destination directory share a publication filesystem.
+   Admission reserves the job in SQLite, not a byte quota. After admission,
+   `importer.import_job` checks streams, duration, language, subtitle flags
+   and targets before the first link. Light screening is not a full decode or content checksum.
    A separately prepared derivative still needs exact source and policy
    bindings and the same admission gates.
 3. **Publish and verify.** For a new link, intent is durable before filesystem
    publication. The coordinator exposes the generated `.nfo` metadata before
    the media link so a scanner cannot see an unlabelled file first. The
-   importer checks the nearest existing destination directory's device before
-   a new hardlink. The kernel makes the final decision. No copy fallback is
-   attempted, and a late failure can leave a recorded intent or NFO to
-   reconcile. Arr means Sonarr for TV or Radarr for films. It associates
+   importer rechecks the filesystem and screened source before the callback
+   can publish either file. Linux compares both device and mount ID, requires
+   readable procfs descriptor information, and can distinguish separate bind
+   mounts on one device. Other supported Unix hosts compare only device IDs.
+   These are observations, not guarantees about the next syscall. The kernel
+   makes the final hardlink decision. No copy fallback is attempted, and a
+   late failure can leave a recorded intent or NFO to reconcile. Arr means
+   Sonarr for TV or Radarr for films. It associates
    an already-linked file without moving the source. `READY` requires an exact
    Arr association and a Jellyfin item at the expected path and identity,
    with the expected default audio/subtitle behavior and a bounded server byte

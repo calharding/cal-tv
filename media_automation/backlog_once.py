@@ -129,7 +129,9 @@ def run(store,job_id,source,config,plan,services,*,expected_request,expected_app
                     if str(matched[0].get('tvdbId',''))!=part['tvdb']:
                         raise ReviewRequired('Reviewed episode TVDB identity differs from canonical Sonarr episode')
         if services.config.get('media_root')!=config['media_root']:raise ReviewRequired('Service/library root differs')
-        predicted={str(media/(str(importer.destination(req,ep))+src.suffix.lower())):ep for src,ep in importer.inventory(source,req)}
+        assessed=[(src,ep,media/(str(importer.destination(req,ep))+src.suffix.lower()))
+                  for src,ep in importer.inventory(source,req)]
+        predicted={str(dst):ep for src,ep,dst in assessed}
         files=plan['files']
         if len(files)!=len(predicted) or {f['host_path'] for f in files}!=set(predicted):raise ReviewRequired('Reviewed plan differs from exact predicted destinations')
         for f in files:
@@ -150,8 +152,8 @@ def run(store,job_id,source,config,plan,services,*,expected_request,expected_app
             roles=[role for role,path in journals.items() if Path(path)==store.root/'jobs.sqlite3']
             if len(roles)!=1:raise ReviewRequired('Current job store is not exactly one reconciled journal')
             scoped_files=[]
-            for src,ep in importer.inventory(source,req):
-                dst=str(media/(str(importer.destination(req,ep))+src.suffix.lower()))
+            for src,ep,path in assessed:
+                dst=str(path)
                 scoped_files.append({'source':str(src),'prepared_root':str(source),'identity_seal':importer.identity_seal(src),
                     'destination':dst,'alternate_destinations':config.get('backlog_alternate_destinations',{}).get(dst,[]),'episode':ep})
             aliases=[req['provider_id']]+[prefix+':'+str(canonical_item[key]) for prefix,key in [('tmdb','tmdbId'),('imdb','imdbId')] if canonical_item.get(key)]
@@ -162,6 +164,10 @@ def run(store,job_id,source,config,plan,services,*,expected_request,expected_app
             if not admission['safe']:raise ReviewRequired('Fresh cross-journal or live catalogue reconciliation blocked admission: '+json.dumps(admission['blockers']))
             expected=config.get('backlog_expected_horizons')
             if expected is not None and expected!=admission['horizons']:raise ReviewRequired('Journal snapshot changed since scope review')
+            # Reserve nothing on a different mount, including if the mapping
+            # changed during read-only cross-journal or catalogue checks.
+            for src,_,dst in assessed:
+                importer.require_same_publication_filesystem(src,dst)
         # Admission claims the exact existing job, not bytes or permission for other jobs.
         with store.db:
             store.db.execute('CREATE TABLE IF NOT EXISTS backlog_runs (job TEXT PRIMARY KEY,binding TEXT NOT NULL,phase TEXT NOT NULL,result TEXT)')
