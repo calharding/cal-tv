@@ -8,6 +8,8 @@ Start at [the launcher](../fastpassctl) and [offline commands](../media_automati
 For the guarded worker, see [backlog_once.py](../media_automation/backlog_once.py).
 The [architecture guide](architecture.md) connects these paths and includes a
 synthetic exercise that needs no site configuration.
+The [portable progress monitor](progress.md) can also be exercised without
+a worker or notification transport.
 
 Test discovery, source custody, journal state, and independent library verification
 separately. For an import, success is a durable verified receipt against the
